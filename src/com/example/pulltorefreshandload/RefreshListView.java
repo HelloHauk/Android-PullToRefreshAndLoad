@@ -3,6 +3,7 @@ package com.example.pulltorefreshandload;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 
+import android.annotation.SuppressLint;
 import android.content.Context;
 import android.util.AttributeSet;
 import android.view.MotionEvent;
@@ -21,9 +22,9 @@ import android.widget.TextView;
  * @描述 下拉刷新数据，下拉加载更多
  * 
  * 
- * @修改提交者 $Author$
- * @提交时间 $Date$
- * @当前版本 $Rev$
+ * @修改提交者 $Author: chp $
+ * @提交时间 $Date: 2016-07-31 10:50:29 +0800 (Sun, 31 Jul 2016) $
+ * @当前版本 $Rev: 19 $
  * 
  */
 public class RefreshListView extends ListView
@@ -38,6 +39,7 @@ public class RefreshListView extends ListView
 	private int mFootViewMeasuredHeight;
 
 	// 顶部下拉刷新
+	public final static int STATE_HEAD_REFRESH_NONE = 0;
 	public final static int STATE_HEAD_REFRESH_PULLDOWN = 1;
 	// 顶部释放刷新
 	public final static int STATE_HEAD_REFRESH_RELEASE = 2;
@@ -46,19 +48,22 @@ public class RefreshListView extends ListView
 	// 底部加载更多
 	public boolean isLoadingMore = false;
 	// 底部上拉刷新
+	public final static int STATE_FOOT_LOADMORE_NONE = 0;
 	public final static int STATE_FOOT_LOADMORE_PULLUP = 1;
-	// 底部加载更多
+	// 底部加载更多中
 	public final static int STATE_FOOT_LOADMORE_LOADING = 2;
 	// 下拉状态
-	private static int refresh_current_state = STATE_HEAD_REFRESH_PULLDOWN;
+	private static int refresh_current_state = STATE_HEAD_REFRESH_NONE;
 	// 上拉状态
-	private static int loadmore_current_state = STATE_FOOT_LOADMORE_PULLUP;
+	private static int loadmore_current_state = STATE_FOOT_LOADMORE_NONE;
 	// 顶部布局
 	private LinearLayout mHeadRootView;
 	// 顶部轮播图
 	private View lunBoView;
 	// 是否需要下拉刷新功能，用户自己选择
 	private boolean isEnablePullRefresh;
+	// 是否需要上拉加载更多，用户自己选择
+	private boolean isEnablePullLoadMore;
 	private float mDownY = -1;
 	private int mListViewOnScreenY;
 	// 下拉刷新箭头的动画
@@ -68,15 +73,26 @@ public class RefreshListView extends ListView
 	// 下拉刷新时头部的环形加载进度
 	private ProgressBar mHeadProgressBar;
 	// 上拉加载更多时脚部的环形加载进度
+	@SuppressWarnings("unused")
 	private ProgressBar mFootLoadmorePb;
+	
+	private boolean isCanRefresh = true;
+	private boolean isCanLoadMore = true;
 
 	/** 设置是否有下拉刷新，给使用时设置的 */
 	public void setEnablePullRefresh(boolean isEnablePullRefresh) {
 		this.isEnablePullRefresh = isEnablePullRefresh;
 	}
+	/** 设置是否有上拉加载更多，给使用时设置的 */
+	public void setEnablePullLoadMore(boolean isEnablePullLoadMore) {
+		this.isEnablePullLoadMore = isEnablePullLoadMore;
+	}
+
 
 	public RefreshListView(Context context) {
 		super(context, null);
+		initView();
+		initAnimation();
 	}
 
 	public RefreshListView(Context context, AttributeSet attrs) {
@@ -118,10 +134,8 @@ public class RefreshListView extends ListView
 	@Override
 	public void addHeaderView(View v) {
 		if (isEnablePullRefresh) {
-			if(v != null){
-				lunBoView = v;
-				mHeadRootView.addView(v);
-			}
+			lunBoView = v;
+			mHeadRootView.addView(v);
 		} else {
 			super.addHeaderView(v);
 		}
@@ -154,6 +168,7 @@ public class RefreshListView extends ListView
 		down_ra.setFillAfter(true);
 	}
 
+	@SuppressLint("ClickableViewAccessibility")
 	@Override
 	public boolean onTouchEvent(MotionEvent ev) {
 		switch (ev.getAction()) {
@@ -161,10 +176,6 @@ public class RefreshListView extends ListView
 			mDownY = ev.getY();
 			break;
 		case MotionEvent.ACTION_MOVE:
-			// 如果不能下拉刷新
-			if (!isEnablePullRefresh) {
-				break;
-			}
 			// 如果没有采集到Y点坐标
 			if (mDownY == -1) {
 				mDownY = ev.getY();
@@ -175,6 +186,10 @@ public class RefreshListView extends ListView
 			// 如果是上下滑动.处理自己的事件，不让listview原生的拖动事件生效
 			// 如果是往下拉，且划到最顶部
 			if (dy > 0 && getFirstVisiblePosition() == 0) {
+				// 如果不能下拉刷新
+				if (!isEnablePullRefresh) {
+					break;
+				}
 				// 如果当前为正在刷新状态
 				if (refresh_current_state == STATE_HEAD_REFRESH_REFRESHING) {
 					break;
@@ -200,6 +215,10 @@ public class RefreshListView extends ListView
 			}
 			// 如果往上拉，并且在最后一个位置，且当前不是加载更多状态
 			if (dy < 0 && getLastVisiblePosition() == getAdapter().getCount() - 1) {
+				// 如果不能下拉刷新
+				if (!isEnablePullLoadMore) {
+					break;
+				}
 				// 如果当前为正在加载中状态
 				if (loadmore_current_state == STATE_FOOT_LOADMORE_LOADING) {
 					break;
@@ -216,6 +235,7 @@ public class RefreshListView extends ListView
 					refreshLoadmoreState();
 				}
 				mFootView.setPadding(0, 0, 0, (int) scrollYDistance);
+				//setSelection(getAdapter().getCount());
 			}
 			break;
 		case MotionEvent.ACTION_UP:
@@ -227,8 +247,11 @@ public class RefreshListView extends ListView
 				mHeadView.setPadding(0, 0, 0, 0);
 				refresh_current_state = STATE_HEAD_REFRESH_REFRESHING;
 				refreshRefreshState();
-				if (mOnRefreshOrLoadMoreListener != null) {
-					mOnRefreshOrLoadMoreListener.refresh();
+				if(isCanRefresh){
+					if (mOnRefreshOrLoadMoreListener != null) {
+						isCanRefresh = false;
+						mOnRefreshOrLoadMoreListener.refresh();
+					}
 				}
 			}
 			// 如果是底部加载更多状态
@@ -236,8 +259,11 @@ public class RefreshListView extends ListView
 				mFootView.setPadding(0, 0, 0, -mFootViewMeasuredHeight);
 			} else if (loadmore_current_state == STATE_FOOT_LOADMORE_LOADING) {
 				mFootView.setPadding(0, 0, 0, 0);
-				if (mOnRefreshOrLoadMoreListener != null) {
-					mOnRefreshOrLoadMoreListener.loadMore();
+				if(isCanLoadMore){
+					if (mOnRefreshOrLoadMoreListener != null) {
+						isCanLoadMore = false;
+						mOnRefreshOrLoadMoreListener.loadMore();
+					}
 				}
 			}
 			break;
@@ -250,25 +276,23 @@ public class RefreshListView extends ListView
 
 	/** 轮播图是否完全显示 */
 	private boolean isLunBOFullShow() {
-		int[] location = new int[2];
-		// 获取listView的位置
-		this.getLocationOnScreen(location);
-		// 获取ListView第一次显示的位置
-		if (mListViewOnScreenY == 0) {
-			mListViewOnScreenY = location[1];
-		}
-		if(lunBoView == null){
-			return true;
-		}else{
+		if(lunBoView != null){
+			int[] location = new int[2];
+			// 获取listView的位置
+			this.getLocationOnScreen(location);
+			// 获取ListView第一次显示的位置
+			if (mListViewOnScreenY == 0) {
+				mListViewOnScreenY = location[1];
+			}
 			// 获取轮播图的位置
 			lunBoView.getLocationOnScreen(location);
-		}
-		
-		int lunBoViewOnScreenY = location[1];
+			int lunBoViewOnScreenY = location[1];
 
-		// 如果轮播图没有完全显示
-		if (lunBoViewOnScreenY < mListViewOnScreenY) {
-			return false;
+			// 如果轮播图没有完全显示
+			if (lunBoViewOnScreenY < mListViewOnScreenY) {
+				return false;
+			}
+			return true;
 		}
 		return true;
 	}
@@ -317,6 +341,7 @@ public class RefreshListView extends ListView
 	}
 
 	/** 格式化时间 */
+	@SuppressLint("SimpleDateFormat")
 	public String getCurrentFormatDate() {
 		SimpleDateFormat simpleDateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
 		// 格式化当前刷新的时间
@@ -335,12 +360,14 @@ public class RefreshListView extends ListView
 			mHeadArrow.setImageResource(R.drawable.common_listview_headview_red_arrow);
 			mHeadDateText.setText(getCurrentFormatDate());
 			mHeadNotifyText.setText("下拉刷新");
+			isCanRefresh = true;
 		}
 		if (loadmore_current_state == STATE_FOOT_LOADMORE_LOADING) {// 如果当前状态为上拉加载更多
 			loadmore_current_state = STATE_FOOT_LOADMORE_PULLUP;
-			// 隐藏上拉视图
 			mFootNotifyText.setText("加载更多");
+			// 隐藏上拉视图
 			mFootView.setPadding(0, 0, 0, -mFootViewMeasuredHeight);
+			isCanLoadMore = true;
 		}
 	}
 
