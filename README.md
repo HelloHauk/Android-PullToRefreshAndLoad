@@ -18,7 +18,7 @@
 > 
 
 
-2.2 MainActivity
+2.2 MainActivity: 可自由选择是否需要上拉和下拉的功能
 
 
 	public class MainActivity extends Activity
@@ -41,8 +41,10 @@
 				mData.add("item" + i);
 			}
 	
-			// 设置允许用户下拉刷新和上拉加载更多
+			// 设置是否需要下拉刷新功能
 			mRefreshListView.setEnablePullRefresh(true);
+			// 设置是否需要上拉加载更多功能
+			mRefreshListView.setEnablePullLoadMore(true);
 	
 			// 设置适配器
 			ArrayAdapter<String> adapter = new ArrayAdapter<String>(this, R.layout.list_item, mData);
